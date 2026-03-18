@@ -1,8 +1,10 @@
 # Oolong — Speaker Diarization in Rust
 
-A Rust implementation of the [pyannote](https://github.com/pyannote/pyannote-audio) speaker diarization pipeline, running segmentation and embedding models via ONNX Runtime. Produces "who spoke when" annotations with VBx clustering (PLDA + VB-HMM), achieving DER 5-7% against the Python reference and 13.6x faster inference.
+A pure Rust implementation of the [pyannote](https://github.com/pyannote/pyannote-audio) speaker diarization pipeline. All inference and clustering logic is written in Rust, running ONNX models via the `ort` crate. No Python runtime is required at inference time.
 
-Also provides streaming Voice Activity Detection (VAD) as a standalone mode.
+The `scripts/pyannote/` directory contains Python utilities for **one-time model preparation only** — downloading pretrained models from HuggingFace, exporting them to ONNX format, and precomputing PLDA parameters. These scripts are not needed at runtime.
+
+Produces "who spoke when" annotations with VBx clustering (PLDA + VB-HMM), achieving DER 5-7% against the Python pyannote reference and 13.6x faster inference. Also provides streaming Voice Activity Detection (VAD) as a standalone mode.
 
 ## Dependencies & Models
 
