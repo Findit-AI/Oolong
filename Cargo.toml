@@ -1,0 +1,27 @@
+[package]
+name = "oolong-diarization"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.87"
+description = "Speaker diarization and VAD via pyannote ONNX models in Rust"
+license = "MIT"
+
+[features]
+default = []
+coreml = ["ort/coreml"]
+
+[dependencies]
+ort = { version = "2.0.0-rc.12" }
+mel_spec = "0.3"
+kodama = "0.2"
+ndarray = "0.16"
+ndarray-npy = "0.9"
+thiserror = "2"
+
+[dev-dependencies]
+ndarray = "0.16"
+serde_json = "1"
+
+[profile.release]
+opt-level = 3
+lto = "thin"

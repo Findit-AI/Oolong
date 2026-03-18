@@ -1,0 +1,8 @@
+pyannote.audio>=3.3
+torch>=2.0
+onnx
+onnxruntime
+onnxscript
+numpy
+soundfile
+huggingface_hub
