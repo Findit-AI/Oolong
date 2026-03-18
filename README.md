@@ -223,7 +223,37 @@ Same model (speaker-diarization-community-1). Python uses PyTorch inference.
 
 ### Performance Bottleneck
 
-Embedding inference accounts for ~80% of total time (per-segment sequential ONNX calls). Batch embedding is not effective due to variable-length inputs. CoreML EP was tested but incompatible with both models (segmentation: compilation failure; embedding: numerical precision loss).
+Embedding inference accounts for ~80% of total time (per-segment sequential ONNX calls). For an 85-minute podcast, embedding alone takes 690s out of 787s total. The bottleneck is the ~4000 sequential ONNX calls (one per active speech segment) — each call is fast, but the count scales linearly with speech density.
+
+## Optimizations
+
+### Implemented
+
+| Optimization | Effect | Details |
+|-------------|--------|---------|
+| **Fbank caching** | Avoid rebuilding Fbank instance per embedding call | `Fbank` initialized once in struct, reused across all chunks |
+| **Segmentation batching** | N single-window ONNX calls → ceil(N/16) batch calls | `[N, 1, 160000]` input tensor, batch size 16 |
+| **Fixed-frame resampling** | Eliminate ONNX Runtime per-shape JIT compilation | All embedding inputs normalized to 200 frames — without this, ORT recompiles kernels for each unique shape, causing 14+ min inference on 18-min audio |
+| **Contiguous memory layout** | Reduce heap allocations in frame reconstruction | Frame probability matrix changed from `Vec<Vec<...>>` to flat `Vec<f32>` row-major |
+| **Center-crop overlap-add** | Reduce boundary artifacts in window stitching | Shared `reconstruct_frame_speaker_probs()` function ensures consistent behavior across all diarization paths |
+| **ort thread configuration** | Reduce multi-core contention | Configurable `intra_threads` for ONNX Runtime intra-op parallelism |
+
+### Attempted but Failed
+
+| Optimization | Why it failed |
+|-------------|---------------|
+| **CoreML EP for segmentation** | MLProgram compilation fails — SincConv1D operator topology not accepted by CoreML's model parser. Error: `"Operations are expected to be topologically sorted"`. Auto-fallback to CPU implemented. |
+| **CoreML EP for embedding** | CoreML model compilation changes numerical behavior. Tested both `CPUAndNeuralEngine` (ANE float16) and `CPUAndGPU` (GPU float32) — both degrade embedding precision enough that PLDA clustering produces 1 speaker instead of 2. Explicitly disabled. |
+| **IOBinding** | Requires CoreML EP to be active for device-side tensor allocation. Since neither model uses CoreML, IOBinding provides no benefit. Code removed. |
+| **Embedding batching** | WeSpeaker model supports dynamic batch, but active frame counts range 20–997 per segment. Zero-padding waste is enormous — batch version is slower and uses more memory than sequential calls. Config field retained but unused. |
+| **TensorRef zero-copy** | `ort` 2.0.0-rc.12's `TensorRef::from_array_view` produces corrupted inference results (4 speakers vs expected 2). Reverted to `Tensor::from_array(to_vec())` with data copy. |
+
+### What Would Help Next
+
+- **Smaller embedding model** (e.g., ECAPA-TDNN) — fewer parameters, faster per-call
+- **INT8 quantization** — reduce embedding ONNX compute per call
+- **Segment merging before embedding** — reduce total call count by pre-clustering adjacent short segments
+- Accept current RTF 0.06–0.15 as sufficient for offline video indexing
 
 ## License
 
